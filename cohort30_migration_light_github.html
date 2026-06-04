@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohorsz migráció – 30 éves ablak</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #dde1e8;
+    --text: #1a1d24;
+    --muted: #4a5260;
+    --accent: #2b7de9;
+    --accent2: #e8612a;
+    --positive: #1d9e62;
+    --negative: #d93636;
+    --grid: #edf0f4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+
+  header {
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  header p {
+    font-size: 0.82rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    margin-bottom: 24px;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .control-group label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .file-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+  }
+
+  .file-btn input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 100px;
+  }
+
+  .file-btn span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .file-btn:hover span { border-color: var(--accent); }
+
+  .file-loaded span { border-color: var(--positive); color: var(--positive); }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 140px;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  .country-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 800px;
+  }
+
+  .country-btn {
+    padding: 5px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .country-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .country-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .country-btn.active.neg {
+    background: var(--negative);
+    border-color: var(--negative);
+  }
+
+  .chart-wrap {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-top: 8px;
+  }
+
+  .chart-wrap canvas {
+    max-height: 460px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 320px;
+    color: var(--muted);
+    gap: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+  }
+
+  .empty-state svg { opacity: 0.3; }
+
+  .zero-line-label {
+    position: absolute;
+    right: 28px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .legend-hint {
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .select-all-btn, .clear-btn {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .select-all-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .clear-btn:hover { color: var(--negative); border-color: var(--negative); }
+
+  .btn-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Kohorsz migráció · 30 éves ablak</h1>
+  <p>0–29 évesek migrációs egyenlege 30 évvel később (30–59 évesen) · % az induló populációhoz képest</p>
+</header>
+
+<div class="controls">
+  <div class="control-group">
+    <label>Görbe típusa</label>
+    <select id="chartType">
+      <option value="line">Vonal</option>
+      <option value="bar">Oszlop</option>
+    </select>
+  </div>
+</div>
+
+<div class="control-group" style="margin-bottom:16px">
+  <label>Országok</label>
+  <div class="btn-row">
+    <button class="select-all-btn" id="selectAll">Mind</button>
+    <button class="clear-btn" id="clearAll">Törlés</button>
+  </div>
+  <div class="country-grid" id="countryGrid"></div>
+</div>
+
+<div class="chart-wrap">
+  <div class="empty-state" id="emptyState">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+      <path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-8"/>
+    </svg>
+    Adatok betöltése...
+  </div>
+  <canvas id="myChart" style="display:none"></canvas>
+  <div style="text-align:right; margin-top:10px; font-family:'DM Mono',monospace; font-size:0.7rem; color:#8a9099; letter-spacing:0.03em;">
+    Adatok forr&#225;sa: Eurostat: demo_pjan, demo_mager
+  </div>
+</div>
+<div class="legend-hint" id="legendHint" style="display:none">Kattints az ország gombokra a kiválasztáshoz · pozitív = bevándorlási többlet · negatív = kivándorlási többlet</div>
+
+<script>
+let allData = [];
+let activeCountries = new Set();
+let chartInstance = null;
+
+const GEO_NAMES = {
+  AT:'Ausztria', BE:'Belgium', BG:'Bulgária', CH:'Svájc', CZ:'Csehország',
+  DE:'Németország', DK:'Dánia', EE:'Észtország', EL:'Görögország', ES:'Spanyolország',
+  FI:'Finnország', FX:'Franciaország', HU:'Magyarország', IS:'Izland', IT:'Olaszország',
+  LI:'Liechtenstein', LT:'Litvánia', LU:'Luxemburg', LV:'Lettország', NL:'Hollandia',
+  NO:'Norvégia', PL:'Lengyelország', PT:'Portugália', RO:'Románia', SE:'Svédország',
+  SI:'Szlovénia', SK:'Szlovákia'
+};
+
+// Distinctive color palette
+const PALETTE = [
+  '#4f9cf9','#f97b4f','#4fbe8a','#f9c74f','#c77dff',
+  '#f95f5f','#43d8c9','#f48fb1','#aed6f1','#a8e6cf',
+  '#ffd3b6','#dcedc1','#ffaaa5','#a29bfe','#fd79a8',
+  '#fdcb6e','#00b894','#e17055','#74b9ff','#81ecec',
+  '#55efc4','#fab1a0','#636e72','#b2bec3','#6c5ce7',
+  '#00cec9','#e84393'
+];
+
+fetch('cohort30_migration.csv')
+  .then(r => r.text())
+  .then(text => {
+    const results = Papa.parse(text, {
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+    });
+    allData = results.data;
+    initUI();
+  })
+  .catch(err => {
+    document.getElementById('emptyState').innerHTML =
+      '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-8"/></svg>Hiba: cohort30_migration.csv nem található';
+  });
+
+function initUI() {
+  const countries = [...new Set(allData.map(d => d.geo))].sort();
+  const grid = document.getElementById('countryGrid');
+  grid.innerHTML = '';
+  activeCountries.clear();
+
+  // Default: Hungary selected
+  if (countries.includes('HU')) activeCountries.add('HU');
+
+  countries.forEach(geo => {
+    const btn = document.createElement('button');
+    btn.className = 'country-btn' + (activeCountries.has(geo) ? ' active' : '');
+    btn.dataset.geo = geo;
+    btn.title = GEO_NAMES[geo] || geo;
+    btn.textContent = geo;
+    btn.addEventListener('click', () => toggleCountry(geo, btn));
+    grid.appendChild(btn);
+  });
+
+  document.getElementById('selectAll').addEventListener('click', () => {
+    countries.forEach(geo => activeCountries.add(geo));
+    grid.querySelectorAll('.country-btn').forEach(b => b.classList.add('active'));
+    renderChart();
+  });
+
+  document.getElementById('clearAll').addEventListener('click', () => {
+    activeCountries.clear();
+    grid.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
+    renderChart();
+  });
+
+  document.getElementById('chartType').addEventListener('change', renderChart);
+
+  renderChart();
+}
+
+function toggleCountry(geo, btn) {
+  if (activeCountries.has(geo)) {
+    activeCountries.delete(geo);
+    btn.classList.remove('active', 'neg');
+  } else {
+    activeCountries.add(geo);
+    btn.classList.add('active');
+  }
+  renderChart();
+}
+
+function renderChart() {
+  const canvas = document.getElementById('myChart');
+  const empty = document.getElementById('emptyState');
+  const hint = document.getElementById('legendHint');
+
+  if (activeCountries.size === 0 || allData.length === 0) {
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    empty.innerHTML = activeCountries.size === 0
+      ? '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-8"/></svg>Válassz ki legalább egy országot'
+      : '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-8"/></svg>Adatok betöltése...';
+    hint.style.display = 'none';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
+  hint.style.display = 'block';
+
+  // Build x-axis labels from all available start_years
+  const allYears = [...new Set(allData.map(d => d.start_year))].sort((a,b)=>a-b);
+  const labels = allYears.map(sy => {
+    const row = allData.find(d => d.start_year === sy);
+    return row ? `${sy}–${row.end_year}` : `${sy}`;
+  });
+
+  const chartType = document.getElementById('chartType').value;
+
+  const datasets = [...activeCountries].sort().map((geo, i) => {
+    const geoData = allData.filter(d => d.geo === geo);
+    const dataMap = {};
+    geoData.forEach(d => { dataMap[d.start_year] = d.migration_pct; });
+    const values = allYears.map(sy => dataMap[sy] !== undefined ? dataMap[sy] : null);
+
+    const color = PALETTE[i % PALETTE.length];
+
+    // Update button color based on last non-null value
+    const lastVal = values.filter(v => v !== null).pop();
+    const btn = document.querySelector(`.country-btn[data-geo="${geo}"]`);
+    if (btn) {
+      btn.classList.toggle('neg', lastVal < 0);
+    }
+
+    return {
+      label: `${geo} – ${GEO_NAMES[geo] || geo}`,
+      data: values,
+      borderColor: color,
+      backgroundColor: chartType === 'bar' ? color + 'cc' : color + '22',
+      borderWidth: chartType === 'line' ? 2 : 1,
+      pointRadius: chartType === 'line' ? (activeCountries.size > 6 ? 2 : 3) : 0,
+      pointHoverRadius: 6,
+      tension: 0.3,
+      fill: false,
+      spanGaps: false,
+    };
+  });
+
+  if (chartInstance) { chartInstance.destroy(); }
+
+  chartInstance = new Chart(canvas, {
+    type: chartType,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: activeCountries.size <= 12,
+          position: 'bottom',
+          labels: {
+            color: '#3a4250',
+            font: { family: 'DM Mono', size: 11 },
+            boxWidth: 12,
+            padding: 14,
+          }
+        },
+        tooltip: {
+          itemSort: (a, b) => (b.raw ?? -Infinity) - (a.raw ?? -Infinity),
+          backgroundColor: '#ffffff',
+          borderColor: '#dde1e8',
+          borderWidth: 1,
+          titleColor: '#1a1d24',
+          bodyColor: '#3a4250',
+          titleFont: { family: 'DM Mono', size: 12 },
+          bodyFont: { family: 'DM Sans', size: 12 },
+          padding: 12,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.raw;
+              if (v === null) return null;
+              return `  ${ctx.dataset.label}: ${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#3a4250',
+            font: { family: 'DM Mono', size: 10 },
+            maxRotation: 60,
+            autoSkip: true,
+            maxTicksLimit: 18,
+          },
+          grid: { color: '#edf0f4' },
+          border: { color: '#dde1e8' },
+        },
+        y: {
+          ticks: {
+            color: '#3a4250',
+            font: { family: 'DM Mono', size: 10 },
+            callback: v => (v > 0 ? '+' : '') + v.toFixed(1) + '%',
+          },
+          grid: {
+            color: ctx => ctx.tick.value === 0 ? '#2b7de966' : '#edf0f4',
+            lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1,
+          },
+          border: { color: '#dde1e8' },
+        }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
